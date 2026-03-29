@@ -29,7 +29,7 @@ Supported options:
 - `--output-format` / `KALSHI_OUTPUT_FORMAT` (`json` or `table`)
 - `--limit` / `KALSHI_PAGE_LIMIT`
 - `--full-history` / `KALSHI_FULL_HISTORY`
-- `--debug-appendix` / `KALSHI_DEBUG_APPENDIX`
+- `--debug` / `KALSHI_DEBUG_APPENDIX`
 - `--starting-cash` / `KALSHI_STARTING_CASH`
 - `--enable-cache` / `KALSHI_ENABLE_CACHE`
 - `--use-cached-starting-cash` / `KALSHI_USE_CACHED_STARTING_CASH`
@@ -66,14 +66,14 @@ python3 ./kalshi.py \
   --output-format table
 ```
 
-Show per-market debug appendix:
+Show per-market reconciliation debug details:
 
 ```bash
 source .venv/bin/activate
 python3 ./kalshi.py \
   --full-history \
   --output-format table \
-  --debug-appendix
+  --debug
 ```
 
 Run with starting cash reconciliation:
@@ -97,16 +97,16 @@ python3 ./kalshi.py \
   --enable-cache
 ```
 
-Reuse cached data and cached starting cash:
+Reuse cached data automatically (no cache flag required if cache file exists):
 
 ```bash
 source .venv/bin/activate
 python3 ./kalshi.py \
   --output-format table \
-  --full-history \
-  --enable-cache \
-  --use-cached-starting-cash
+  --full-history
 ```
+
+If cache exists (`./.kalshi_cache.json` by default), the script auto-loads cached trade JSON and cached starting cash.
 
 Force full refresh (ignore cached trade JSON):
 
@@ -115,21 +115,10 @@ source .venv/bin/activate
 python3 ./kalshi.py \
   --output-format table \
   --full-history \
-  --enable-cache \
   --force-refresh
 ```
 
-## Appendix Metrics (Table Mode)
-
-Table output includes:
-
-- Total Dollars Traded
-- Total Trades Won
-- Total Trades Loss
-- Total Trades Percent Win/Loss
-- Total Profit/Loss
-- Closed Profit/Loss
-- Open Notional
+## Reconciliation Output (Table Mode)
 
 Reconciliation output includes:
 
@@ -137,16 +126,18 @@ Reconciliation output includes:
 - Ending Cash (Kalshi)
 - Portfolio Value (Kalshi)
 - Open Market Value
+- Open Notional (Cost Basis)
 - Estimated Unrealized P/L
+- Trades Won
+- Trades Loss
+- Trades Percent Win/Loss
+- Closed Profit/Loss
 - Estimated Total Profit/Loss
 - Net P/L vs Starting Cash
 
-`Closed Profit/Loss` and Trades Win/Loss metrics include both:
+`Closed Profit/Loss` and trade win/loss metrics include both fill-based closes and expiration settlements.
 
-- Fill-based closes (buy/sell round-trips)
-- Expiration settlements from `portfolio/settlements`
-
-With `--debug-appendix`, details are shown per `market_ticker` (including settlement quantities and unmatched settlement quantity).
+With `--debug`, details are shown per `market_ticker` (including settlement quantities and unmatched settlement quantity).
 
 ## GitHub Safety Notes
 

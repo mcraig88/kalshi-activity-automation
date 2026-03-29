@@ -228,15 +228,15 @@ def _get_settlements_full_history(client: KalshiClient, limit: int):
 def _parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch Kalshi portfolio fills and render output as JSON or a table with summary appendix."
+            "Fetch Kalshi portfolio fills and render output as JSON or a table with reconciliation summary."
         ),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=(
             "Examples:\n"
             "  python3 ./kalshi.py --api-key-id YOUR_KEY --private-key-path ./kalshi-key.txt --limit 50 --output-format table\n"
-            "  python3 ./kalshi.py --full-history --limit 200 --output-format table --debug-appendix\n"
+            "  python3 ./kalshi.py --full-history --limit 200 --output-format table --debug\n"
             "  python3 ./kalshi.py --output-format table --starting-cash 100 --enable-cache\n"
-            "  python3 ./kalshi.py --output-format table --use-cached-starting-cash --enable-cache\n"
+            "  python3 ./kalshi.py --output-format table  # auto-uses cache if ./.kalshi_cache.json exists\n"
             "  python3 ./kalshi.py --output-format table --enable-cache --force-refresh\n"
             "\n"
             "Override precedence:\n"
@@ -294,10 +294,11 @@ def _parse_args():
         ),
     )
     parser.add_argument(
-        "--debug-appendix",
+        "--debug",
+        dest="debug_appendix",
         action="store_true",
         help=(
-            "Print per-market_ticker appendix calculation details in table mode.\n"
+            "Print per-market_ticker reconciliation debug details in table mode.\n"
             "Overrides KALSHI_DEBUG_APPENDIX."
         ),
     )
@@ -313,7 +314,8 @@ def _parse_args():
         "--enable-cache",
         action="store_true",
         help=(
-            "Enable local cache for reuse (starting cash + fetched trade JSON).\n"
+            "Enable local cache persistence (starting cash + fetched trade JSON).\n"
+            "Cache read is automatic when cache file exists, even without this flag.\n"
             "Overrides KALSHI_ENABLE_CACHE."
         ),
     )
@@ -321,7 +323,8 @@ def _parse_args():
         "--use-cached-starting-cash",
         action="store_true",
         help=(
-            "Load starting cash from local cache if --starting-cash is not provided.\n"
+            "Explicitly prefer cached starting cash when --starting-cash is not provided.\n"
+            "Note: cached starting cash is auto-used when available.\n"
             "Overrides KALSHI_USE_CACHED_STARTING_CASH."
         ),
     )
@@ -414,12 +417,16 @@ def _write_json_file(path: str, payload):
 
 
 def _resolve_cache_settings(args):
+    cache_file = args.cache_file or os.getenv("KALSHI_CACHE_FILE") or KALSHI_CACHE_FILE
+    cache_file = os.path.expanduser(cache_file)
+
     if args.enable_cache:
         enable_cache = True
     else:
         env_flag = os.getenv("KALSHI_ENABLE_CACHE")
         if env_flag is None:
-            enable_cache = KALSHI_ENABLE_CACHE
+            # Default behavior: if cache file is present, use cache without requiring flags.
+            enable_cache = bool(KALSHI_ENABLE_CACHE) or os.path.exists(cache_file)
         else:
             enable_cache = _parse_bool(env_flag)
 
@@ -432,8 +439,11 @@ def _resolve_cache_settings(args):
         else:
             force_refresh = _parse_bool(env_flag)
 
-    cache_file = args.cache_file or os.getenv("KALSHI_CACHE_FILE") or KALSHI_CACHE_FILE
-    return enable_cache, force_refresh, os.path.expanduser(cache_file)
+    # Force refresh should always update local cache artifacts.
+    if force_refresh:
+        enable_cache = True
+
+    return enable_cache, force_refresh, cache_file
 
 
 def _resolve_starting_cash(args, cache_doc=None):
@@ -460,7 +470,11 @@ def _resolve_starting_cash(args, cache_doc=None):
     else:
         cached_flag = os.getenv("KALSHI_USE_CACHED_STARTING_CASH")
         if cached_flag is None:
-            use_cached = KALSHI_USE_CACHED_STARTING_CASH
+            # Default behavior: if cache has starting cash, use it automatically.
+            cache_has_starting_cash = (
+                isinstance(cache_doc, dict) and _to_float(cache_doc.get("starting_cash")) is not None
+            )
+            use_cached = bool(KALSHI_USE_CACHED_STARTING_CASH) or cache_has_starting_cash
         else:
             use_cached = _parse_bool(cached_flag)
 
@@ -487,17 +501,18 @@ def _cache_trade_data(cache_doc, fills_data, settlements_rows, balance_snapshot,
     return cache_doc
 
 
-def _load_cached_trade_data(cache_doc, full_history, limit):
+def _load_cached_trade_data(cache_doc, full_history, limit, allow_any=False):
     if not isinstance(cache_doc, dict):
         return None
     trades_cache = cache_doc.get("trades_cache")
     if not isinstance(trades_cache, dict):
         return None
-    if bool(trades_cache.get("full_history")) != bool(full_history):
-        return None
-    cached_limit = _to_float(trades_cache.get("limit"))
-    if cached_limit is None or int(cached_limit) != int(limit):
-        return None
+    if not allow_any:
+        if bool(trades_cache.get("full_history")) != bool(full_history):
+            return None
+        cached_limit = _to_float(trades_cache.get("limit"))
+        if cached_limit is None or int(cached_limit) != int(limit):
+            return None
     if "fills_data" not in trades_cache:
         return None
     return trades_cache
@@ -713,7 +728,13 @@ def _extract_balance_snapshot(client: KalshiClient):
     }
 
 
-def _print_reconciliation(summary, balance_snapshot, starting_cash=None, starting_cash_source=None):
+def _print_reconciliation(
+    summary,
+    balance_snapshot,
+    starting_cash=None,
+    starting_cash_source=None,
+    debug_appendix: bool = False,
+):
     if not balance_snapshot:
         return
 
@@ -736,27 +757,17 @@ def _print_reconciliation(summary, balance_snapshot, starting_cash=None, startin
     print(f"Open Market Value (Portfolio - Cash): ${open_market_value:,.2f}")
     print(f"Open Notional (Cost Basis): ${open_notional:,.2f}")
     print(f"Estimated Unrealized P/L: ${estimated_unrealized:,.2f}")
+    print(f"Trades Won: {summary['total_trades_won']}")
+    print(f"Trades Loss: {summary['total_trades_loss']}")
+    print(f"Trades Percent Win/Loss: {summary['total_trades_percent_win_loss']}")
     print(f"Closed Profit/Loss: ${summary['total_closed_profit_loss']:,.2f}")
     print(f"Estimated Total Profit/Loss: ${estimated_total_profit_loss:,.2f}")
     if starting_cash is not None:
         net_vs_start = portfolio_value - starting_cash
         print(f"Net P/L vs Starting Cash: ${net_vs_start:,.2f}")
-
-
-def _print_table_appendix(rows, settlements=None, debug_appendix: bool = False):
-    summary = _compute_table_appendix(rows, settlements=settlements)
-    print("")
-    print("Appendix")
-    print(f"Total Dollars Wagered: ${summary['total_dollars_traded']:,.2f}")
-    print(f"Total Trades Won: {summary['total_trades_won']}")
-    print(f"Total Trades Loss: {summary['total_trades_loss']}")
-    print(f"Total Trades Percent Win/Loss: {summary['total_trades_percent_win_loss']}")
-    print(f"Total Profit/Loss: {summary['total_profit_loss_text']}")
-    print(f"Closed Profit/Loss: ${summary['total_closed_profit_loss']:,.2f}")
-    print(f"Total Dollars Remaining Open: ${summary['total_open_notional']:,.2f}")
     if debug_appendix:
         print("")
-        print("Appendix Debug (per market_ticker)")
+        print("Reconciliation Debug (per market_ticker)")
         for row in summary["debug_rows"]:
             print(
                 f"- {row['market_ticker']} [sides={row['sides_seen']}]: buys={row['buy_count']}, sells={row['sell_count']}, "
@@ -767,7 +778,6 @@ def _print_table_appendix(rows, settlements=None, debug_appendix: bool = False):
                 f"unmatched_settlement_qty={row['unmatched_settlement_qty']:.2f}, "
                 f"status={row['status']}"
             )
-    return summary
 
 
 def _print_table(rows):
@@ -828,12 +838,13 @@ def _print_fills_data(
 
     if isinstance(rows, list) and rows and all(isinstance(item, dict) for item in rows):
         _print_table(rows)
-        summary = _print_table_appendix(rows, settlements=settlements, debug_appendix=debug_appendix)
+        summary = _compute_table_appendix(rows, settlements=settlements)
         _print_reconciliation(
             summary,
             balance_snapshot=balance_snapshot,
             starting_cash=starting_cash,
             starting_cash_source=starting_cash_source,
+            debug_appendix=debug_appendix,
         )
     else:
         # Fallback when response shape is not tabular.
@@ -843,7 +854,7 @@ def _print_fills_data(
 # --- Example Execution ---
 if __name__ == "__main__":
     # Override order:
-    #   1) CLI args (--api-key-id, --private-key-path, --timeout-seconds, --output-format, --limit, --full-history, --debug-appendix, --starting-cash, --enable-cache, --use-cached-starting-cash, --cache-file, --force-refresh)
+    #   1) CLI args (--api-key-id, --private-key-path, --timeout-seconds, --output-format, --limit, --full-history, --debug, --starting-cash, --enable-cache, --use-cached-starting-cash, --cache-file, --force-refresh)
     #   2) Environment variables (KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY_PATH, KALSHI_TIMEOUT_SECONDS, KALSHI_OUTPUT_FORMAT, KALSHI_PAGE_LIMIT, KALSHI_FULL_HISTORY, KALSHI_DEBUG_APPENDIX, KALSHI_STARTING_CASH, KALSHI_USE_CACHED_STARTING_CASH, KALSHI_ENABLE_CACHE, KALSHI_CACHE_FILE, KALSHI_FORCE_REFRESH)
     #   3) Module constants at the top of this file
     try:
@@ -888,7 +899,7 @@ if __name__ == "__main__":
             else:
                 debug_appendix = _parse_bool(debug_appendix_env)
         starting_cash, starting_cash_source = _resolve_starting_cash(args, cache_doc=cache_doc)
-        if enable_cache and starting_cash is not None:
+        if enable_cache and args.starting_cash is not None:
             cache_doc["starting_cash"] = starting_cash
             cache_doc["starting_cash_updated_at_utc"] = (
                 datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -901,6 +912,13 @@ if __name__ == "__main__":
         cached_trades = None
         if enable_cache and not force_refresh:
             cached_trades = _load_cached_trade_data(cache_doc, full_history=full_history, limit=limit)
+            if cached_trades is None:
+                cached_trades = _load_cached_trade_data(
+                    cache_doc,
+                    full_history=full_history,
+                    limit=limit,
+                    allow_any=True,
+                )
 
         if cached_trades is not None:
             fills_data = cached_trades.get("fills_data")
