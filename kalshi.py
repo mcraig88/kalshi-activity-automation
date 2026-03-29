@@ -3,14 +3,28 @@ import argparse
 import datetime
 import json
 import os
-import requests
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+
+try:
+    import requests
+    REQUESTS_IMPORT_ERROR = None
+except ModuleNotFoundError as exc:
+    requests = None
+    REQUESTS_IMPORT_ERROR = exc
+
+try:
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+    CRYPTOGRAPHY_IMPORT_ERROR = None
+except ModuleNotFoundError as exc:
+    hashes = None
+    serialization = None
+    padding = None
+    CRYPTOGRAPHY_IMPORT_ERROR = exc
 
 KALSHI_API_KEY_ID = "YOUR_KALSHI_API_KEY_ID"
 KALSHI_PRIVATE_KEY_PATH = "./kalshi-key.txt"
 KALSHI_TIMEOUT_SECONDS = 10.0
-KALSHI_OUTPUT_FORMAT = "json"
+KALSHI_OUTPUT_FORMAT = None
 KALSHI_PAGE_LIMIT = 100
 KALSHI_FULL_HISTORY = False
 KALSHI_DEBUG_APPENDIX = False
@@ -19,6 +33,17 @@ KALSHI_USE_CACHED_STARTING_CASH = False
 KALSHI_ENABLE_CACHE = False
 KALSHI_CACHE_FILE = "./.kalshi_cache.json"
 KALSHI_FORCE_REFRESH = False
+KALSHI_DEFAULT_TABLE_COLUMNS = (
+    "created_time",
+    "market_ticker",
+    "action",
+    "side",
+    "count_fp",
+    "price_fixed",
+    "trade_value_dollars",
+    "fee_cost",
+    "is_taker",
+)
 
 
 class KalshiClientError(Exception):
@@ -29,9 +54,28 @@ class KalshiAPIError(KalshiClientError):
     """Raised when the Kalshi API returns an error response."""
 
 
+def _ensure_runtime_dependencies():
+    missing = []
+    if requests is None:
+        missing.append("requests")
+    if hashes is None or serialization is None or padding is None:
+        missing.append("cryptography")
+    if missing:
+        requirements_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "requirements.txt"
+        )
+        packages = ", ".join(sorted(missing))
+        raise KalshiClientError(
+            f"Missing required Python package(s): {packages}. "
+            "Install them with:\n"
+            f"  python3 -m pip install -r {requirements_path}"
+        )
+
+
 class KalshiClient:
 
     def __init__(self, key_id: str, key_path: str, timeout_seconds: float = 10.0):
+        _ensure_runtime_dependencies()
         self.key_id = key_id
         self.private_key = self._load_private_key(key_path)
         self.timeout_seconds = timeout_seconds
@@ -159,6 +203,11 @@ def _parse_bool(value: str) -> bool:
     raise KalshiClientError(f"Invalid boolean value '{value}'.")
 
 
+def _parse_csv_list(value: str):
+    columns = [item.strip() for item in value.split(",")]
+    return [item for item in columns if item]
+
+
 def _get_fills_full_history(client: KalshiClient, limit: int):
     all_rows = []
     cursor = None
@@ -234,11 +283,14 @@ def _parse_args():
         epilog=(
             "Examples:\n"
             "  python3 ./kalshi.py --api-key-id YOUR_KEY --private-key-path ./kalshi-key.txt --limit 50 --output-format table\n"
+            "  python3 ./kalshi.py --output-format reconciliation --starting-cash 100\n"
             "  python3 ./kalshi.py --full-history --limit 200 --output-format table --debug\n"
+            "  python3 ./kalshi.py --output-format table --columns created_time,market_ticker,action,side,count_fp,price_fixed\n"
+            "  python3 ./kalshi.py --output-format table --all-columns\n"
             "  python3 ./kalshi.py --output-format table --starting-cash 100 --enable-cache\n"
             "  python3 ./kalshi.py --output-format table  # auto-uses cache if ./.kalshi_cache.json exists\n"
             "  python3 ./kalshi.py --output-format table --enable-cache --force-refresh\n"
-            "  python3 ./kalshi.py  # no --output-format: reconciliation-only output\n"
+            "  python3 ./kalshi.py  # no --output-format set anywhere: reconciliation-only output\n"
             "\n"
             "Override precedence:\n"
             "  1) CLI args\n"
@@ -270,10 +322,10 @@ def _parse_args():
     )
     parser.add_argument(
         "--output-format",
-        choices=["json", "table"],
+        choices=["json", "table", "reconciliation"],
         help=(
-            "Output format: 'json' or 'table'.\n"
-            "If omitted (and KALSHI_OUTPUT_FORMAT is not set), script prints reconciliation only.\n"
+            "Output format: 'json', 'table', or 'reconciliation'.\n"
+            "If omitted and no env/default override is set, script prints reconciliation only.\n"
             "Overrides KALSHI_OUTPUT_FORMAT and top-of-file KALSHI_OUTPUT_FORMAT."
         ),
     )
@@ -346,6 +398,19 @@ def _parse_args():
             "Overrides KALSHI_FORCE_REFRESH."
         ),
     )
+    table_view_group = parser.add_mutually_exclusive_group()
+    table_view_group.add_argument(
+        "--columns",
+        help=(
+            "Comma-separated table columns to display.\n"
+            "Example: --columns created_time,market_ticker,action,side,count_fp,price_fixed"
+        ),
+    )
+    table_view_group.add_argument(
+        "--all-columns",
+        action="store_true",
+        help="Show all available raw table columns instead of the curated default set.",
+    )
     return parser.parse_args()
 
 
@@ -367,6 +432,17 @@ def _resolve_private_key_path(args) -> str:
         "No valid private key path found. Checked CLI arg, "
         "KALSHI_PRIVATE_KEY_PATH env var, and top-of-file KALSHI_PRIVATE_KEY_PATH."
     )
+
+
+def _resolve_output_format(args) -> str:
+    output_format = args.output_format
+    if output_format is None:
+        output_format = os.getenv("KALSHI_OUTPUT_FORMAT")
+    if output_format is None:
+        output_format = KALSHI_OUTPUT_FORMAT
+    if output_format is None:
+        output_format = "reconciliation"
+    return output_format
 
 
 def _value_to_string(value):
@@ -518,6 +594,69 @@ def _load_cached_trade_data(cache_doc, full_history, limit, allow_any=False):
     if "fills_data" not in trades_cache:
         return None
     return trades_cache
+
+
+def _get_display_price_fields(row):
+    side = str(row.get("side", "")).strip().lower()
+    if side == "yes":
+        return row.get("yes_price_fixed"), row.get("yes_price_dollars")
+    if side == "no":
+        return row.get("no_price_fixed"), row.get("no_price_dollars")
+    return None, None
+
+
+def _prepare_table_rows(rows):
+    prepared_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        prepared_row = dict(row)
+        price_fixed, price_dollars = _get_display_price_fields(row)
+        prepared_row["price_fixed"] = price_fixed
+        prepared_row["price_dollars"] = price_dollars
+
+        count = _to_float(row.get("count_fp"))
+        price_fixed_float = _to_float(price_fixed)
+        if count is not None and price_fixed_float is not None:
+            prepared_row["trade_value_dollars"] = round(count * price_fixed_float, 4)
+        else:
+            prepared_row["trade_value_dollars"] = None
+        prepared_rows.append(prepared_row)
+    return prepared_rows
+
+
+def _collect_columns(rows):
+    columns = []
+    for row in rows:
+        if isinstance(row, dict):
+            for key in row.keys():
+                if key not in columns:
+                    columns.append(key)
+    return columns
+
+
+def _resolve_table_columns(rows, requested_columns=None, show_all_columns=False):
+    available_columns = _collect_columns(rows)
+    if show_all_columns:
+        return available_columns
+
+    if requested_columns:
+        unknown_columns = [column for column in requested_columns if column not in available_columns]
+        if unknown_columns:
+            available_columns_text = ", ".join(available_columns)
+            unknown_columns_text = ", ".join(unknown_columns)
+            raise KalshiClientError(
+                f"Unknown table columns: {unknown_columns_text}. "
+                f"Available columns: {available_columns_text}"
+            )
+        return requested_columns
+
+    default_columns = [
+        column for column in KALSHI_DEFAULT_TABLE_COLUMNS if column in available_columns
+    ]
+    if default_columns:
+        return default_columns
+    return available_columns
 
 
 def _compute_table_appendix(rows, settlements=None):
@@ -782,17 +921,13 @@ def _print_reconciliation(
             )
 
 
-def _print_table(rows):
+def _print_table(rows, columns=None):
     if not rows:
         print("No rows to display.")
         return
 
-    columns = []
-    for row in rows:
-        if isinstance(row, dict):
-            for key in row.keys():
-                if key not in columns:
-                    columns.append(key)
+    if columns is None:
+        columns = _collect_columns(rows)
 
     if not columns:
         print("No tabular fields to display.")
@@ -824,6 +959,8 @@ def _print_fills_data(
     balance_snapshot=None,
     starting_cash=None,
     starting_cash_source=None,
+    table_columns=None,
+    show_all_columns: bool = False,
 ):
     if output_format == "json":
         print(json.dumps(fills_data, indent=2))
@@ -853,8 +990,14 @@ def _print_fills_data(
         print(json.dumps(fills_data, indent=2))
         return
 
+    prepared_rows = _prepare_table_rows(rows)
     if output_format == "table":
-        _print_table(rows)
+        resolved_columns = _resolve_table_columns(
+            prepared_rows,
+            requested_columns=table_columns,
+            show_all_columns=show_all_columns,
+        )
+        _print_table(prepared_rows, columns=resolved_columns)
 
     summary = _compute_table_appendix(rows, settlements=settlements)
     _print_reconciliation(
@@ -869,7 +1012,7 @@ def _print_fills_data(
 # --- Example Execution ---
 if __name__ == "__main__":
     # Override order:
-    #   1) CLI args (--api-key-id, --private-key-path, --timeout-seconds, --output-format, --limit, --full-history, --debug, --starting-cash, --enable-cache, --use-cached-starting-cash, --cache-file, --force-refresh)
+    #   1) CLI args (--api-key-id, --private-key-path, --timeout-seconds, --output-format, --limit, --full-history, --debug, --starting-cash, --enable-cache, --use-cached-starting-cash, --cache-file, --force-refresh, --columns, --all-columns)
     #   2) Environment variables (KALSHI_API_KEY_ID, KALSHI_PRIVATE_KEY_PATH, KALSHI_TIMEOUT_SECONDS, KALSHI_OUTPUT_FORMAT, KALSHI_PAGE_LIMIT, KALSHI_FULL_HISTORY, KALSHI_DEBUG_APPENDIX, KALSHI_STARTING_CASH, KALSHI_USE_CACHED_STARTING_CASH, KALSHI_ENABLE_CACHE, KALSHI_CACHE_FILE, KALSHI_FORCE_REFRESH)
     #   3) Module constants at the top of this file
     try:
@@ -884,17 +1027,17 @@ if __name__ == "__main__":
         timeout_seconds = args.timeout_seconds
         if timeout_seconds is None:
             timeout_seconds = float(os.getenv("KALSHI_TIMEOUT_SECONDS", str(KALSHI_TIMEOUT_SECONDS)))
-        output_format_env = os.getenv("KALSHI_OUTPUT_FORMAT")
-        # If output format is omitted entirely (no CLI arg + no env var),
-        # default to reconciliation-only output.
-        if args.output_format is None and output_format_env is None:
-            output_format = "reconciliation"
-        else:
-            output_format = args.output_format or output_format_env or KALSHI_OUTPUT_FORMAT
+        output_format = _resolve_output_format(args)
         if output_format not in {"json", "table", "reconciliation"}:
             raise KalshiClientError(
-                f"Invalid output format '{output_format}'. Use 'json' or 'table'. "
-                "Or omit --output-format for reconciliation-only output."
+                f"Invalid output format '{output_format}'. Use 'json', 'table', or 'reconciliation'."
+            )
+        table_columns = _parse_csv_list(args.columns) if args.columns else None
+        if args.columns and not table_columns:
+            raise KalshiClientError("--columns must include at least one column name.")
+        if output_format != "table" and (table_columns or args.all_columns):
+            raise KalshiClientError(
+                "--columns and --all-columns can only be used with --output-format table."
             )
         limit = args.limit
         if limit is None:
@@ -1015,6 +1158,8 @@ if __name__ == "__main__":
             balance_snapshot=balance_snapshot,
             starting_cash=starting_cash,
             starting_cash_source=starting_cash_source,
+            table_columns=table_columns,
+            show_all_columns=args.all_columns,
         )
     except KalshiClientError as exc:
         print(f"Kalshi client error: {exc}")
