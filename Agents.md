@@ -4,8 +4,15 @@ This file documents how coding agents (and humans) should work in this repositor
 
 ## Repository Purpose
 
-- Main script: `./kalshi.py`
-- Goal: fetch Kalshi fills/settlements, compute reconciliation metrics, and render output in `json`, `table`, or `reconciliation` mode.
+- Main scripts:
+  - `./kalshi.py`
+  - `./robinhood_event_contracts.py`
+  - `./robinhood_crypto.py`
+- Goal: report on event-contract activity across providers.
+- Current provider support:
+  - Kalshi via live API
+  - Robinhood event contracts via statement CSV import
+  - Robinhood crypto via live read-only API
 
 ## Local Setup
 
@@ -32,6 +39,23 @@ Optional key inputs:
 - `--force-refresh`
 - `--columns`
 - `--all-columns`
+
+Robinhood statement reporting:
+
+- `--input-csv`
+- `--input-pdf`
+- `--input-text`
+- `--output-format {table,json}`
+- monthly PDF mode parses `Trade Confirmation Summary`, `Purchase and Sale Summary`, and `Journal Entries`
+- `--input-pdf` and `--input-text` can accept multiple files for one aggregate report
+
+Robinhood crypto API:
+
+- `--api-key`
+- `--private-key-path`
+- `--resource {accounts,orders,orders-report,holdings,trading-pairs}`
+- `--api-version {v1,v2}`
+- `--account-number`
 
 ## Cache Behavior
 
@@ -88,8 +112,10 @@ Reconciliation-only output is the default if no output format is set via CLI, en
 ## Standard Validation Before Commit
 
 ```bash
-python3 -m py_compile ./kalshi.py
+python3 -m py_compile ./kalshi.py ./robinhood_crypto.py ./robinhood_event_contracts.py ./reporting_utils.py
 python3 ./kalshi.py --help
+./.venv/bin/python ./robinhood_crypto.py --help
+./.venv/bin/python -m unittest discover -s tests -v
 git status --short
 ```
 
@@ -99,3 +125,4 @@ If CLI flags, cache behavior, or reconciliation math changes, update:
 
 - `README.md`
 - this file (`Agents.md`)
+- `docs/robinhood-event-contracts.md` when Robinhood event-contract assumptions change

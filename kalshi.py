@@ -3,6 +3,7 @@ import argparse
 import datetime
 import json
 import os
+from reporting_utils import collect_columns, render_table
 
 try:
     import requests
@@ -445,14 +446,6 @@ def _resolve_output_format(args) -> str:
     return output_format
 
 
-def _value_to_string(value):
-    if value is None:
-        return ""
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, separators=(",", ":"))
-    return str(value)
-
-
 def _to_float(value):
     if value is None:
         return None
@@ -625,18 +618,8 @@ def _prepare_table_rows(rows):
     return prepared_rows
 
 
-def _collect_columns(rows):
-    columns = []
-    for row in rows:
-        if isinstance(row, dict):
-            for key in row.keys():
-                if key not in columns:
-                    columns.append(key)
-    return columns
-
-
 def _resolve_table_columns(rows, requested_columns=None, show_all_columns=False):
-    available_columns = _collect_columns(rows)
+    available_columns = collect_columns(rows)
     if show_all_columns:
         return available_columns
 
@@ -919,38 +902,6 @@ def _print_reconciliation(
                 f"unmatched_settlement_qty={row['unmatched_settlement_qty']:.2f}, "
                 f"status={row['status']}"
             )
-
-
-def _print_table(rows, columns=None):
-    if not rows:
-        print("No rows to display.")
-        return
-
-    if columns is None:
-        columns = _collect_columns(rows)
-
-    if not columns:
-        print("No tabular fields to display.")
-        return
-
-    widths = {col: len(col) for col in columns}
-    for row in rows:
-        for col in columns:
-            value = _value_to_string(row.get(col, "") if isinstance(row, dict) else "")
-            widths[col] = max(widths[col], len(value))
-
-    header = " | ".join(col.ljust(widths[col]) for col in columns)
-    divider = "-+-".join("-" * widths[col] for col in columns)
-    print(header)
-    print(divider)
-    for row in rows:
-        line = " | ".join(
-            _value_to_string(row.get(col, "") if isinstance(row, dict) else "").ljust(widths[col])
-            for col in columns
-        )
-        print(line)
-
-
 def _print_fills_data(
     fills_data,
     output_format: str,
@@ -997,7 +948,7 @@ def _print_fills_data(
             requested_columns=table_columns,
             show_all_columns=show_all_columns,
         )
-        _print_table(prepared_rows, columns=resolved_columns)
+        render_table(prepared_rows, columns=resolved_columns)
 
     summary = _compute_table_appendix(rows, settlements=settlements)
     _print_reconciliation(

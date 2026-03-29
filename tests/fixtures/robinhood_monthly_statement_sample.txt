@@ -1,0 +1,196 @@
+ROBINHOOD DERIVATIVES, LLC
+151 N Franklin St
+Floor 29
+Chicago, IL 60606
+United States
+support@robinhood.com
++1 (650) 761-7789
+Monthly Statement
+Date: 2026-02-28
+Client Name: Doe, Jordan
+RHD Account Number: RH0000000000
+Client Address: 100 Example Ave
+Springfield, IL 62701
+US
+Monthly Trade Confirmations
+Trade
+Date AT Qty
+Long
+Qty
+Short Subtype Symbol Month Contract Year
+Exchange Exp Date Trade
+Price
+Currency
+Code Trade Type Description
+2026-02-
+22 SW 1.00 0.00 YES KXWOHOCKEY-MEN26CGOLD-USA Kalshi 2026-02-
+22 0.61000000 USD Trade United States
+2026-02-
+22 SW 1.00 0.00 2026-02-
+06 SW 6.00 0.00 2026-02-
+06 SW 14.00 0.00 2026-02-
+08 SW 6.00 0.00 2026-02-
+09 SW 14.00 0.00 Trade Confirmation Summary
+NO YES YES NO NO KXWOHOCKEY-MEN26CGOLD-USA Kalshi 2026-02-
+22 0E-8 USD Final
+Settlement United States
+KXNFLPREPACK1HFT-26FEB08SEANE-
+NE1HSEAFT Kalshi 2026-02-
+09 0.14000000 USD Trade NE wins 1H &amp; SEA wins
+game
+KXSB-26-SEA Kalshi 2028-02-
+08 0.69000000 USD Trade Seattle
+KXNFLPREPACK1HFT-26FEB08SEANE-
+NE1HSEAFT Kalshi 2026-02-
+09 1.00000000 USD Final
+Settlement
+NE wins 1H &amp; SEA wins
+game
+KXSB-26-SEA Kalshi 2026-02-
+09 0E-8 USD Final
+Settlement Seattle
+Trade
+Date AT
+Total
+Qty
+Long
+Total
+Qty
+Short
+Subtype Avg Long Avg
+Short Symbol Description Contract
+Year Month Exchange Exp
+Date Commission Exchange
+Fees
+NFA
+Fees
+Total
+Commissions
+and Fees
+Currency
+Code
+2026-
+02-22 SW 1.00 0.00 YES 0.61000000 KXWOHOCKEY-
+MEN26CGOLD-USA United States Kalshi 2026-
+02-22 -0.010000 -0.010000 0.00 -0.02 USD
+2026-
+02-22 SW 1.00 0.00 NO 0E-8 KXWOHOCKEY-
+MEN26CGOLD-USA United States Kalshi 2026-
+02-22 0.00 USD
+2026-
+02-06 SW 6.00 0.00 YES 0.14000000
+KXNFLPREPACK1HFT-
+26FEB08SEANE-
+NE1HSEAFT
+NE wins 1H
+&amp; SEA wins
+game
+Kalshi 2026-
+02-09 -0.060000 -0.060000 0.00 -0.12 USD
+2026-
+02-06 SW 14.00 0.00 YES 0.69000000 KXSB-26-SEA Seattle Kalshi 2028-
+02-08 -0.140000 -0.140000 0.00 -0.28 USD
+2026-
+02-08 SW 6.00 0.00 NO 1.00000000
+KXNFLPREPACK1HFT-
+26FEB08SEANE-
+NE1HSEAFT
+NE wins 1H
+&amp; SEA wins
+game
+Kalshi 2026-
+02-09 0.00 USD
+2026-
+02-09 SW 14.00 0.00 NO 0E-8 KXSB-26-SEA Seattle Kalshi 2026-
+02-09 0.00 USD
+Purchase and Sale
+Trade
+Date AT Qty Buy
+Offset
+Qty Sell
+Offset Subtype Symbol Month Contract Year
+Exchange Exp Date Transaction
+Price
+Currency
+Code Description
+2026-02-
+06 SW 6.00 0.00 YES KXNFLPREPACK1HFT-26FEB08SEANE-
+NE1HSEAFT Kalshi 2026-02-
+09 0.14000000 USD NE wins 1H &amp; SEA wins
+game
+2026-02-
+06 SW 14.00 0.00 YES KXSB-26-SEA Kalshi 2026-02-
+09 0.69000000 USD Seattle
+2026-02-
+08 SW 6.00 0.00 NO KXNFLPREPACK1HFT-26FEB08SEANE-
+NE1HSEAFT Kalshi 2026-02-
+09 1.00000000 USD NE wins 1H &amp; SEA wins
+game
+2026-02-
+09 SW 14.00 0.00 NO KXSB-26-SEA Kalshi 2026-02-
+09 0E-8 USD Seattle
+2026-02-
+22 SW 1.00 0.00 YES KXWOHOCKEY-MEN26CGOLD-USA Kalshi 2026-02-
+22 0.61000000 USD United States
+2026-02-
+22 SW 1.00 0.00 NO KXWOHOCKEY-MEN26CGOLD-USA Kalshi 2026-02-
+22 0E-8 USD United States
+Purchase and Sale Summary
+Trade
+Date AT Total Qty
+Long
+Total Qty
+Short Subtype Symbol Month Contract Year
+Exchange Exp Date Gross P&L Currency
+Code Description
+2026-02-
+01 SW 6.00 0.00 YES KXNFLPREPACK1HFT-26FEB08SEANE-
+NE1HSEAFT Kalshi 2026-02-
+09 -0.840000 USD NE wins 1H &amp; SEA wins
+game
+2026-02-
+01 SW 6.00 0.00 NO KXNFLPREPACK1HFT-26FEB08SEANE-
+NE1HSEAFT Kalshi 2026-02-
+09 0.000000 USD NE wins 1H &amp; SEA wins
+game
+2026-02-
+01 SW 14.00 0.00 NO KXSB-26-SEA Kalshi 2026-02-
+09 14.000000 USD Seattle
+2026-02-
+01 SW 14.00 0.00 YES KXSB-26-SEA Kalshi 2026-02-
+09 -9.660000 USD Seattle
+2026-02-
+01 SW 1.00 0.00 NO KXWOHOCKEY-MEN26CGOLD-USA Kalshi 2026-02-
+22 1.000000 USD United States
+2026-02-
+01 SW 1.00 0.00 YES KXWOHOCKEY-MEN26CGOLD-USA Kalshi 2026-02-
+22 -0.610000 USD United States
+Journal Entries
+Date AT Description Currency Credit/Debit
+2026-02-09 SW Deposit USD 10.90
+2026-02-10 SW Withdrawal USD -14.00
+2026-02-23 SW Withdrawal USD -0.37
+Open Positions
+Date Opened AT Quantity Buy Quantity Sell Subtype Symbol Contract Year Month Exchange Exp Date Trade Price Currency Settlement Price Trade Type Description
+Open Position Summary
+As of Date AT Symbol Contract Year Month Exchange Exp Date Total Long Total Short Subtype Avg Long Avg Short OTE / Unrealized P&L Market Value Currency Code Description
+Margin Calls
+Date Issued AT Call Amount Currency Code Age
+Account Summary
+AT Beginning Cash Balance Commissions Exchange Fees NFA Fees Total Commissions and Fees Gross Profit and Loss Event Contract Trade Costs / Proceeds Cash Activity Ending Cash Balance Open Trade Equity / Unrealized Profit and Loss Total Equity Net Liquidity Event Contracts Open Position Market Value Initial Margin Margin Excess / Deficit Margin Call SW US
+0.00 0.00
+-0.21 0.00
+-0.210000 0.000000
+0.00 0.00
+-0.420000 0.000000
+3.890000 0.000000
+3.890000 0.000000
+-3.47 0.00
+0.00 0.00
+0.000000 0.000000
+0.00 0.00
+0.000000 0.000000
+0.000000 0.000000
+0.00 0.00
+0.00 0.00
+0.00 0.00
