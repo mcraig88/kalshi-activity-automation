@@ -30,6 +30,11 @@ Supported options:
 - `--limit` / `KALSHI_PAGE_LIMIT`
 - `--full-history` / `KALSHI_FULL_HISTORY`
 - `--debug-appendix` / `KALSHI_DEBUG_APPENDIX`
+- `--starting-cash` / `KALSHI_STARTING_CASH`
+- `--enable-cache` / `KALSHI_ENABLE_CACHE`
+- `--use-cached-starting-cash` / `KALSHI_USE_CACHED_STARTING_CASH`
+- `--cache-file` / `KALSHI_CACHE_FILE`
+- `--force-refresh` / `KALSHI_FORCE_REFRESH`
 
 ## Usage
 
@@ -71,6 +76,49 @@ python3 ./kalshi.py \
   --debug-appendix
 ```
 
+Run with starting cash reconciliation:
+
+```bash
+source .venv/bin/activate
+python3 ./kalshi.py \
+  --output-format table \
+  --full-history \
+  --starting-cash 100
+```
+
+Enable local cache (starting cash + fetched trade JSON):
+
+```bash
+source .venv/bin/activate
+python3 ./kalshi.py \
+  --output-format table \
+  --full-history \
+  --starting-cash 100 \
+  --enable-cache
+```
+
+Reuse cached data and cached starting cash:
+
+```bash
+source .venv/bin/activate
+python3 ./kalshi.py \
+  --output-format table \
+  --full-history \
+  --enable-cache \
+  --use-cached-starting-cash
+```
+
+Force full refresh (ignore cached trade JSON):
+
+```bash
+source .venv/bin/activate
+python3 ./kalshi.py \
+  --output-format table \
+  --full-history \
+  --enable-cache \
+  --force-refresh
+```
+
 ## Appendix Metrics (Table Mode)
 
 Table output includes:
@@ -83,13 +131,28 @@ Table output includes:
 - Closed Profit/Loss
 - Open Notional
 
-With `--debug-appendix`, details are shown per `market_ticker + side`.
+Reconciliation output includes:
+
+- Starting Cash
+- Ending Cash (Kalshi)
+- Portfolio Value (Kalshi)
+- Open Market Value
+- Estimated Unrealized P/L
+- Estimated Total Profit/Loss
+- Net P/L vs Starting Cash
+
+`Closed Profit/Loss` and Trades Win/Loss metrics include both:
+
+- Fill-based closes (buy/sell round-trips)
+- Expiration settlements from `portfolio/settlements`
+
+With `--debug-appendix`, details are shown per `market_ticker` (including settlement quantities and unmatched settlement quantity).
 
 ## GitHub Safety Notes
 
 - Do not commit private keys.
 - Keep key files local (for example `./kalshi-key.txt`) and out of version control.
-- `./kalshi-key.txt`, `./.venv/`, and Python cache files are already ignored by `./.gitignore`.
+- `./kalshi-key.txt`, `./.kalshi_cache.json`, `./.venv/`, and Python cache files are already ignored by `./.gitignore`.
 - If you previously exposed API credentials or private keys, rotate them before publishing.
 
 ## Key Format Note
