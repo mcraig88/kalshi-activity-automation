@@ -5,14 +5,14 @@ This file documents how coding agents (and humans) should work in this repositor
 ## Repository Purpose
 
 - Main script: `./kalshi.py`
-- Goal: fetch Kalshi fills/settlements, compute reconciliation metrics, and render output in `json` or `table` mode.
+- Goal: fetch Kalshi fills/settlements, compute reconciliation metrics, and render output in `json`, `table`, or `reconciliation` mode.
 
 ## Local Setup
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install requests cryptography
+python -m pip install -r requirements.txt
 python3 ./kalshi.py --help
 ```
 
@@ -25,11 +25,13 @@ Required:
 
 Optional key inputs:
 
-- `--output-format {json,table}`
+- `--output-format {json,table,reconciliation}`
 - `--full-history`
 - `--starting-cash`
 - `--debug`
 - `--force-refresh`
+- `--columns`
+- `--all-columns`
 
 ## Cache Behavior
 
@@ -68,6 +70,20 @@ In table mode, script prints:
    - Net P/L vs Starting Cash
 
 With `--debug`, include per-ticker reconciliation debug lines.
+
+Default table columns:
+
+- `created_time`
+- `market_ticker`
+- `action`
+- `side`
+- `count_fp`
+- `price_fixed`
+- `trade_value_dollars`
+- `fee_cost`
+- `is_taker`
+
+Reconciliation-only output is the default if no output format is set via CLI, environment variable, or top-of-file constant.
 
 ## Standard Validation Before Commit
 
