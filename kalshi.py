@@ -7,7 +7,7 @@ import requests
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
-KALSHI_API_KEY_ID = "7a09498c-f8d0-4a50-912a-df455124e905"
+KALSHI_API_KEY_ID = "YOUR_KALSHI_API_KEY_ID"
 KALSHI_PRIVATE_KEY_PATH = "./kalshi-key.txt"
 KALSHI_TIMEOUT_SECONDS = 10.0
 KALSHI_OUTPUT_FORMAT = "json"

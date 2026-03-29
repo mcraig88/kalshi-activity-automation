@@ -1,87 +1,79 @@
-# Kalshi Script Setup
+# Kalshi Fills Script
 
-This folder contains a Python script for calling Kalshi's API:
+This repository contains a Python script for fetching Kalshi fills and rendering results in JSON or table format.
 
-- `/Users/mcraig/src/Kalshi/kalshi.py`
+- Script: `./kalshi.py`
 
-## Install Dependencies (PEP 668 safe)
-
-On Homebrew Python, global `pip install` may fail with `externally-managed-environment`.
-Use a project virtual environment instead:
+## Quick Start
 
 ```bash
-cd /Users/mcraig/src/Kalshi
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install requests cryptography
+python3 ./kalshi.py --help
 ```
-
-## Dependency Status
-
-Dependencies are installed in `/Users/mcraig/src/Kalshi/.venv`:
-
-- `requests==2.33.0`
-- `cryptography==46.0.6`
 
 ## Configuration
 
-`kalshi.py` defines these defaults at the top of the file:
+`./kalshi.py` supports three override layers (highest to lowest):
 
-- `KALSHI_API_KEY_ID = "7a09498c-f8d0-4a50-912a-df455124e905"`
-- `KALSHI_PRIVATE_KEY_PATH = "./kalshi-key.txt"`
-- `KALSHI_TIMEOUT_SECONDS = 10.0`
-- `KALSHI_OUTPUT_FORMAT = "json"`
-- `KALSHI_PAGE_LIMIT = 100`
-- `KALSHI_FULL_HISTORY = False`
-- `KALSHI_DEBUG_APPENDIX = False`
+1. CLI args
+2. Environment variables
+3. Top-of-file constants in `./kalshi.py`
 
-Override precedence:
+Supported options:
 
-1. CLI args (`--api-key-id`, `--private-key-path`, `--timeout-seconds`, `--output-format`, `--limit`, `--full-history`, `--debug-appendix`)
-2. Environment variables (`KALSHI_API_KEY_ID`, `KALSHI_PRIVATE_KEY_PATH`, `KALSHI_TIMEOUT_SECONDS`, `KALSHI_OUTPUT_FORMAT`, `KALSHI_PAGE_LIMIT`, `KALSHI_FULL_HISTORY`, `KALSHI_DEBUG_APPENDIX`)
-3. Top-of-file defaults
+- `--api-key-id` / `KALSHI_API_KEY_ID`
+- `--private-key-path` / `KALSHI_PRIVATE_KEY_PATH`
+- `--timeout-seconds` / `KALSHI_TIMEOUT_SECONDS`
+- `--output-format` / `KALSHI_OUTPUT_FORMAT` (`json` or `table`)
+- `--limit` / `KALSHI_PAGE_LIMIT`
+- `--full-history` / `KALSHI_FULL_HISTORY`
+- `--debug-appendix` / `KALSHI_DEBUG_APPENDIX`
 
-## Usage Examples
+## Usage
 
-### 1) Run with script defaults
+Run with defaults:
 
 ```bash
-cd /Users/mcraig/src/Kalshi
 source .venv/bin/activate
-python3 /Users/mcraig/src/Kalshi/kalshi.py
+export KALSHI_API_KEY_ID="YOUR_KALSHI_API_KEY_ID"
+python3 ./kalshi.py
 ```
 
-### 2) Run with environment variable overrides
+Run with overrides:
 
 ```bash
-cd /Users/mcraig/src/Kalshi
 source .venv/bin/activate
-export KALSHI_PRIVATE_KEY_PATH="/absolute/path/to/your/kalshi-private-key.pem"
-export KALSHI_TIMEOUT_SECONDS="15"
-python3 /Users/mcraig/src/Kalshi/kalshi.py
-```
-
-### 3) Run with CLI overrides
-
-```bash
-cd /Users/mcraig/src/Kalshi
-source .venv/bin/activate
-python3 /Users/mcraig/src/Kalshi/kalshi.py \
-  --private-key-path "/absolute/path/to/your/kalshi-private-key.pem" \
-  --timeout-seconds 15
-```
-
-### 4) Output in table format
-
-```bash
-cd /Users/mcraig/src/Kalshi
-source .venv/bin/activate
-python3 /Users/mcraig/src/Kalshi/kalshi.py \
-  --private-key-path "/absolute/path/to/your/kalshi-private-key.pem" \
+python3 ./kalshi.py \
+  --private-key-path "./kalshi-key.txt" \
+  --timeout-seconds 15 \
   --output-format table
 ```
 
-Table output now includes an appendix with:
+Pull full history with pagination:
+
+```bash
+source .venv/bin/activate
+python3 ./kalshi.py \
+  --full-history \
+  --limit 200 \
+  --output-format table
+```
+
+Show per-market debug appendix:
+
+```bash
+source .venv/bin/activate
+python3 ./kalshi.py \
+  --full-history \
+  --output-format table \
+  --debug-appendix
+```
+
+## Appendix Metrics (Table Mode)
+
+Table output includes:
 
 - Total Dollars Traded
 - Total Trades Won
@@ -91,35 +83,16 @@ Table output now includes an appendix with:
 - Closed Profit/Loss
 - Open Notional
 
-### 5) Pull full history (internal pagination)
+With `--debug-appendix`, details are shown per `market_ticker + side`.
 
-```bash
-cd /Users/mcraig/src/Kalshi
-source .venv/bin/activate
-python3 /Users/mcraig/src/Kalshi/kalshi.py \
-  --private-key-path "/absolute/path/to/your/kalshi-private-key.pem" \
-  --full-history \
-  --limit 200 \
-  --output-format table
-```
+## GitHub Safety Notes
 
-`--full-history` automatically follows API cursor pagination until no next cursor is returned.
+- Do not commit private keys.
+- Keep key files local (for example `./kalshi-key.txt`) and out of version control.
+- `./kalshi-key.txt`, `./.venv/`, and Python cache files are already ignored by `./.gitignore`.
+- If you previously exposed API credentials or private keys, rotate them before publishing.
 
-### 6) Show appendix debug math by market ticker
+## Key Format Note
 
-```bash
-cd /Users/mcraig/src/Kalshi
-source .venv/bin/activate
-python3 /Users/mcraig/src/Kalshi/kalshi.py \
-  --private-key-path "/absolute/path/to/your/kalshi-private-key.pem" \
-  --full-history \
-  --output-format table \
-  --debug-appendix
-```
-
-`--debug-appendix` prints per-`market_ticker + side` buy/sell counts, wagered amount, fees, closed P/L, open notional, and status.
-
-## Important Note
-
-`~/.ssh/id_ed25519.pub` is an SSH public key path, not a Kalshi RSA private key PEM file.
-For successful Kalshi authentication, set `KALSHI_PRIVATE_KEY_PATH` (env or CLI) to your Kalshi private key file.
+Kalshi auth expects an RSA private key PEM file.
+An SSH public key like `~/.ssh/id_ed12345.pub` will not work.
