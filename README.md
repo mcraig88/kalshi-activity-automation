@@ -1,6 +1,6 @@
 # Kalshi Fills Script
 
-This repository contains a Python script for fetching Kalshi fills and rendering results in JSON or table format.
+This repository contains a Python script for fetching Kalshi fills and rendering results in JSON, table, or reconciliation-only format.
 
 - Script: `./kalshi.py`
 
@@ -27,6 +27,7 @@ Supported options:
 - `--private-key-path` / `KALSHI_PRIVATE_KEY_PATH`
 - `--timeout-seconds` / `KALSHI_TIMEOUT_SECONDS`
 - `--output-format` / `KALSHI_OUTPUT_FORMAT` (`json` or `table`)
+  - If omitted (and `KALSHI_OUTPUT_FORMAT` is not set), output defaults to reconciliation-only.
 - `--limit` / `KALSHI_PAGE_LIMIT`
 - `--full-history` / `KALSHI_FULL_HISTORY`
 - `--debug` / `KALSHI_DEBUG_APPENDIX`
@@ -45,6 +46,11 @@ source .venv/bin/activate
 export KALSHI_API_KEY_ID="YOUR_KALSHI_API_KEY_ID"
 python3 ./kalshi.py
 ```
+
+Default behavior note:
+
+- If `--output-format` is omitted and `KALSHI_OUTPUT_FORMAT` is unset, the script prints only the reconciliation section.
+- If `KALSHI_OUTPUT_FORMAT` is set (for example `json` or `table`), that format is used.
 
 Run with overrides:
 
@@ -118,7 +124,12 @@ python3 ./kalshi.py \
   --force-refresh
 ```
 
-## Reconciliation Output (Table Mode)
+## Reconciliation Output
+
+Reconciliation is shown when:
+
+- `--output-format table` is used (table + reconciliation), or
+- `--output-format` is omitted and `KALSHI_OUTPUT_FORMAT` is unset (reconciliation only).
 
 Reconciliation output includes:
 

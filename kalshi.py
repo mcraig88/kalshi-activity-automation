@@ -228,7 +228,7 @@ def _get_settlements_full_history(client: KalshiClient, limit: int):
 def _parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch Kalshi portfolio fills and render output as JSON or a table with reconciliation summary."
+            "Fetch Kalshi portfolio fills and render output as JSON, table, or reconciliation-only summary."
         ),
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=(
@@ -238,6 +238,7 @@ def _parse_args():
             "  python3 ./kalshi.py --output-format table --starting-cash 100 --enable-cache\n"
             "  python3 ./kalshi.py --output-format table  # auto-uses cache if ./.kalshi_cache.json exists\n"
             "  python3 ./kalshi.py --output-format table --enable-cache --force-refresh\n"
+            "  python3 ./kalshi.py  # no --output-format: reconciliation-only output\n"
             "\n"
             "Override precedence:\n"
             "  1) CLI args\n"
@@ -272,6 +273,7 @@ def _parse_args():
         choices=["json", "table"],
         help=(
             "Output format: 'json' or 'table'.\n"
+            "If omitted (and KALSHI_OUTPUT_FORMAT is not set), script prints reconciliation only.\n"
             "Overrides KALSHI_OUTPUT_FORMAT and top-of-file KALSHI_OUTPUT_FORMAT."
         ),
     )
@@ -298,7 +300,7 @@ def _parse_args():
         dest="debug_appendix",
         action="store_true",
         help=(
-            "Print per-market_ticker reconciliation debug details in table mode.\n"
+            "Print per-market_ticker reconciliation debug details in table/reconciliation modes.\n"
             "Overrides KALSHI_DEBUG_APPENDIX."
         ),
     )
@@ -836,19 +838,32 @@ def _print_fills_data(
     elif isinstance(fills_data, list):
         rows = fills_data
 
-    if isinstance(rows, list) and rows and all(isinstance(item, dict) for item in rows):
-        _print_table(rows)
-        summary = _compute_table_appendix(rows, settlements=settlements)
-        _print_reconciliation(
-            summary,
-            balance_snapshot=balance_snapshot,
-            starting_cash=starting_cash,
-            starting_cash_source=starting_cash_source,
-            debug_appendix=debug_appendix,
-        )
-    else:
-        # Fallback when response shape is not tabular.
+    if not isinstance(rows, list) or not all(isinstance(item, dict) for item in rows):
+        if output_format == "reconciliation":
+            summary = _compute_table_appendix([], settlements=settlements)
+            _print_reconciliation(
+                summary,
+                balance_snapshot=balance_snapshot,
+                starting_cash=starting_cash,
+                starting_cash_source=starting_cash_source,
+                debug_appendix=debug_appendix,
+            )
+            return
+        # Fallback when response shape is not tabular in table mode.
         print(json.dumps(fills_data, indent=2))
+        return
+
+    if output_format == "table":
+        _print_table(rows)
+
+    summary = _compute_table_appendix(rows, settlements=settlements)
+    _print_reconciliation(
+        summary,
+        balance_snapshot=balance_snapshot,
+        starting_cash=starting_cash,
+        starting_cash_source=starting_cash_source,
+        debug_appendix=debug_appendix,
+    )
 
 
 # --- Example Execution ---
@@ -869,12 +884,17 @@ if __name__ == "__main__":
         timeout_seconds = args.timeout_seconds
         if timeout_seconds is None:
             timeout_seconds = float(os.getenv("KALSHI_TIMEOUT_SECONDS", str(KALSHI_TIMEOUT_SECONDS)))
-        output_format = args.output_format or os.getenv(
-            "KALSHI_OUTPUT_FORMAT", KALSHI_OUTPUT_FORMAT
-        )
-        if output_format not in {"json", "table"}:
+        output_format_env = os.getenv("KALSHI_OUTPUT_FORMAT")
+        # If output format is omitted entirely (no CLI arg + no env var),
+        # default to reconciliation-only output.
+        if args.output_format is None and output_format_env is None:
+            output_format = "reconciliation"
+        else:
+            output_format = args.output_format or output_format_env or KALSHI_OUTPUT_FORMAT
+        if output_format not in {"json", "table", "reconciliation"}:
             raise KalshiClientError(
-                f"Invalid output format '{output_format}'. Use 'json' or 'table'."
+                f"Invalid output format '{output_format}'. Use 'json' or 'table'. "
+                "Or omit --output-format for reconciliation-only output."
             )
         limit = args.limit
         if limit is None:
@@ -929,7 +949,7 @@ if __name__ == "__main__":
                 fills_data = _get_fills_full_history(client, limit=limit)
             else:
                 fills_data = client.get_fills(limit=limit)
-            if output_format == "table":
+            if output_format in {"table", "reconciliation"}:
                 settlements_data = _get_settlements_full_history(client, limit=200)
                 all_settlements = settlements_data.get("settlements", [])
                 balance_snapshot = _extract_balance_snapshot(client)
@@ -946,6 +966,37 @@ if __name__ == "__main__":
                     for settlement in all_settlements
                     if str(settlement.get("ticker", "")).strip() in tickers_in_rows
                 ]
+            if enable_cache:
+                cache_doc = _cache_trade_data(
+                    cache_doc,
+                    fills_data=fills_data,
+                    settlements_rows=settlements_rows,
+                    balance_snapshot=balance_snapshot,
+                    full_history=full_history,
+                    limit=limit,
+                )
+                _write_json_file(cache_file, cache_doc)
+        # If loaded from cache and reconciliation output is requested,
+        # ensure required reconciliation artifacts exist.
+        if output_format in {"table", "reconciliation"} and (
+            settlements_rows is None or balance_snapshot is None
+        ):
+            settlements_data = _get_settlements_full_history(client, limit=200)
+            all_settlements = settlements_data.get("settlements", [])
+            balance_snapshot = _extract_balance_snapshot(client)
+            rows_for_filter, _rows_key = _extract_rows(fills_data)
+            tickers_in_rows = set()
+            if isinstance(rows_for_filter, list):
+                tickers_in_rows = {
+                    str(row.get("market_ticker", "")).strip()
+                    for row in rows_for_filter
+                    if isinstance(row, dict) and row.get("market_ticker")
+                }
+            settlements_rows = [
+                settlement
+                for settlement in all_settlements
+                if str(settlement.get("ticker", "")).strip() in tickers_in_rows
+            ]
             if enable_cache:
                 cache_doc = _cache_trade_data(
                     cache_doc,
