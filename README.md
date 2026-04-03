@@ -43,6 +43,44 @@ python -m pip install -r requirements.txt
 ./.venv/bin/python -m unittest discover -s tests -v
 ```
 
+## Quick Usage
+
+Run Kalshi reconciliation or table reporting:
+
+```bash
+./.venv/bin/python ./kalshi.py \
+  --api-key-id "YOUR_KALSHI_API_KEY_ID" \
+  --private-key-path "./kalshi-key.txt" \
+  --output-format table \
+  --full-history
+```
+
+Read Robinhood crypto orders with a summary report:
+
+```bash
+./.venv/bin/python ./robinhood_crypto.py \
+  --api-key "YOUR_ROBINHOOD_API_KEY" \
+  --private-key-path ~/.ssh/rh_privatekey \
+  --resource orders-report \
+  --api-version v2 \
+  --output-format table
+```
+
+Import Robinhood event-contract monthly statements:
+
+```bash
+./.venv/bin/python ./robinhood_event_contracts.py \
+  --input-pdf ./_reference_files/sample_january_derivatives_events.pdf \
+  ./_reference_files/sample_february_derivatives_events.pdf \
+  --output-format table
+```
+
+More detailed usage guides:
+
+- [./README-kalshi.md](./README-kalshi.md)
+- [./README-robinhood-crypto.md](./README-robinhood-crypto.md)
+- [./docs/robinhood-event-contracts.md](./docs/robinhood-event-contracts.md)
+
 Local configuration reference:
 
 - [./.env.example](./.env.example)

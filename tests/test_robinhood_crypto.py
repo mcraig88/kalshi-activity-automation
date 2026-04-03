@@ -180,6 +180,97 @@ class RobinhoodCryptoTests(unittest.TestCase):
         self.assertAlmostEqual(summary["net_cash_flow"], 7.0)
         self.assertAlmostEqual(summary["open_cost_basis"], 0.0)
 
+    def test_summarize_orders_sorts_by_created_at_before_fifo_matching(self):
+        rows = [
+            {
+                "symbol": "BTC-USD",
+                "side": "sell",
+                "state": "filled",
+                "filled_notional": 110.0,
+                "filled_asset_quantity": 1.0,
+                "created_at": "2024-01-02T00:00:00Z",
+            },
+            {
+                "symbol": "BTC-USD",
+                "side": "buy",
+                "state": "filled",
+                "filled_notional": 100.0,
+                "filled_asset_quantity": 1.0,
+                "created_at": "2024-01-01T00:00:00Z",
+            },
+        ]
+
+        summary = _summarize_orders(rows)
+
+        self.assertAlmostEqual(summary["realized_profit_loss"], 10.0)
+        self.assertAlmostEqual(summary["open_cost_basis"], 0.0)
+        self.assertAlmostEqual(summary["unmatched_sell_quantity"], 0.0)
+
+    def test_summarize_orders_warns_when_history_is_filtered(self):
+        rows = [
+            {
+                "symbol": "BTC-USD",
+                "side": "buy",
+                "state": "filled",
+                "filled_notional": 100.0,
+                "filled_asset_quantity": 1.0,
+                "created_at": "2024-01-01T00:00:00Z",
+            },
+            {
+                "symbol": "BTC-USD",
+                "side": "sell",
+                "state": "filled",
+                "filled_notional": 90.0,
+                "filled_asset_quantity": 2.0,
+                "created_at": "2024-01-02T00:00:00Z",
+            },
+        ]
+
+        summary = _summarize_orders(
+            rows,
+            summary_context={
+                "limit_applied": True,
+                "created_at_start": "2024-01-01T00:00:00Z",
+            },
+        )
+
+        self.assertEqual(summary["unmatched_sell_quantity"], 1.0)
+        self.assertTrue(any("--limit" in warning for warning in summary["warnings"]))
+        self.assertTrue(
+            any("2024-01-01T00:00:00Z" in warning for warning in summary["warnings"])
+        )
+        self.assertTrue(
+            any("could not be matched" in warning for warning in summary["warnings"])
+        )
+
+    def test_summarize_orders_uses_holdings_to_suppress_false_open_cost_basis(self):
+        rows = [
+            {
+                "symbol": "BTC-USD",
+                "side": "buy",
+                "state": "filled",
+                "filled_notional": 100.0,
+                "filled_asset_quantity": 1.0,
+                "created_at": "2024-01-01T00:00:00Z",
+            },
+        ]
+        holdings_payload = {
+            "results": [
+                {
+                    "asset_code": "BTC",
+                    "total_quantity": "0",
+                }
+            ]
+        }
+
+        summary = _summarize_orders(rows, holdings_payload=holdings_payload)
+
+        self.assertAlmostEqual(summary["raw_open_cost_basis"], 100.0)
+        self.assertAlmostEqual(summary["open_cost_basis"], 0.0)
+        self.assertTrue(
+            any("Current holdings are zero for BTC-USD" in warning for warning in summary["warnings"])
+        )
+
     def test_resolve_account_number_prefers_env_before_fetching_accounts(self):
         client = mock.Mock()
         with mock.patch.dict(os.environ, {"ROBINHOOD_ACCOUNT_NUMBER": "ENV-ACCOUNT"}, clear=False):

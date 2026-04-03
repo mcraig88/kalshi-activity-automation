@@ -56,6 +56,7 @@ Robinhood crypto API:
 - `--resource {accounts,orders,orders-report,holdings,trading-pairs}`
 - `--api-version {v1,v2}`
 - `--account-number`
+- `orders-report` sorts by `created_at` before FIFO matching and may print warnings when history is limited or current holdings disagree with order-derived open lots
 
 ## Cache Behavior
 

@@ -1,5 +1,6 @@
 import argparse
 import base64
+from datetime import datetime, timezone
 import json
 import os
 import time
@@ -43,6 +44,7 @@ ROBINHOOD_DEFAULT_ORDER_COLUMNS = (
     "filled_asset_quantity",
     "created_at",
 )
+ORDER_MATCH_EPSILON = 1e-12
 
 
 class RobinhoodCryptoError(Exception):
@@ -383,7 +385,86 @@ def _extract_order_fee(row):
     return 0.0
 
 
-def _summarize_orders(rows):
+def _parse_created_at_timestamp(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).timestamp()
+
+
+def _sort_orders_for_summary(rows):
+    sortable_rows = []
+    for index, row in enumerate(rows):
+        timestamp = None
+        if isinstance(row, dict):
+            timestamp = _parse_created_at_timestamp(row.get("created_at"))
+        sortable_rows.append(
+            (
+                1 if timestamp is None else 0,
+                0.0 if timestamp is None else timestamp,
+                index,
+                row,
+            )
+        )
+    return [row for _, _, _, row in sorted(sortable_rows)]
+
+
+def _extract_holdings_rows(payload):
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict) and isinstance(payload.get("results"), list):
+        return payload["results"]
+    return []
+
+
+def _extract_holding_asset_code(row):
+    asset_code = str(row.get("asset_code", "")).strip()
+    if asset_code:
+        return asset_code.upper()
+    symbol = str(row.get("symbol", "")).strip().upper()
+    if symbol and "-" in symbol:
+        return symbol.split("-", 1)[0]
+    return symbol
+
+
+def _extract_holding_quantity(row):
+    for key in (
+        "total_quantity",
+        "quantity",
+        "asset_quantity",
+        "quantity_available_for_trading",
+        "available_quantity",
+        "available",
+    ):
+        quantity = _to_float(row.get(key))
+        if quantity is not None:
+            return quantity
+    return None
+
+
+def _build_holding_quantity_by_asset(payload):
+    quantities = {}
+    for row in _extract_holdings_rows(payload):
+        if not isinstance(row, dict):
+            continue
+        asset_code = _extract_holding_asset_code(row)
+        quantity = _extract_holding_quantity(row)
+        if asset_code and quantity is not None:
+            quantities[asset_code] = quantities.get(asset_code, 0.0) + quantity
+    return quantities
+
+
+def _summarize_orders(rows, holdings_payload=None, summary_context=None):
     summary = {
         "total_orders": 0,
         "buy_orders": 0,
@@ -401,11 +482,15 @@ def _summarize_orders(rows):
         "realized_profit_loss": 0.0,
         "net_cash_flow": 0.0,
         "open_cost_basis": 0.0,
+        "raw_open_cost_basis": 0.0,
         "unmatched_sell_quantity": 0.0,
+        "warnings": [],
     }
+    if summary_context is None:
+        summary_context = {}
     open_lots = {}
 
-    for row in rows:
+    for row in _sort_orders_for_summary(rows):
         if not isinstance(row, dict):
             continue
         summary["total_orders"] += 1
@@ -454,7 +539,7 @@ def _summarize_orders(rows):
                     matched_cost += matched_from_lot * current_lot["unit_cost"]
                     current_lot["quantity"] -= matched_from_lot
                     remaining_to_match -= matched_from_lot
-                    if current_lot["quantity"] <= 1e-12:
+                    if current_lot["quantity"] <= ORDER_MATCH_EPSILON:
                         lots.pop(0)
 
                 if matched_quantity > 0:
@@ -463,9 +548,75 @@ def _summarize_orders(rows):
                 if remaining_to_match > 0:
                     summary["unmatched_sell_quantity"] += remaining_to_match
 
-    for lots in open_lots.values():
+    open_position_details = []
+    for symbol, lots in open_lots.items():
+        symbol_quantity = 0.0
+        symbol_cost_basis = 0.0
         for lot in lots:
-            summary["open_cost_basis"] += lot["quantity"] * lot["unit_cost"]
+            symbol_quantity += lot["quantity"]
+            symbol_cost_basis += lot["quantity"] * lot["unit_cost"]
+        if symbol_quantity > ORDER_MATCH_EPSILON:
+            open_position_details.append(
+                {
+                    "symbol": symbol,
+                    "asset_code": symbol.split("-", 1)[0].upper() if symbol else "",
+                    "quantity": symbol_quantity,
+                    "cost_basis": symbol_cost_basis,
+                }
+            )
+            summary["raw_open_cost_basis"] += symbol_cost_basis
+
+    summary["open_cost_basis"] = summary["raw_open_cost_basis"]
+
+    if summary_context.get("limit_applied"):
+        summary["warnings"].append(
+            "Order history may be incomplete because --limit was used; realized P/L and open cost basis only reflect the fetched rows."
+        )
+    created_at_start = summary_context.get("created_at_start")
+    if created_at_start:
+        summary["warnings"].append(
+            f"Order history starts at {created_at_start}; older buys or sells are excluded from this summary."
+        )
+    holdings_warning = summary_context.get("holdings_warning")
+    if holdings_warning:
+        summary["warnings"].append(holdings_warning)
+    if summary["unmatched_sell_quantity"] > ORDER_MATCH_EPSILON:
+        summary["warnings"].append(
+            "Some sells could not be matched to earlier buys in the fetched order history; the summary should be treated as incomplete."
+        )
+
+    if holdings_payload is not None:
+        holdings_by_asset = _build_holding_quantity_by_asset(holdings_payload)
+        suppressed_symbols = []
+        mismatched_symbols = []
+        adjusted_open_cost_basis = 0.0
+        for position in open_position_details:
+            asset_code = position["asset_code"]
+            holding_quantity = holdings_by_asset.get(asset_code)
+            if holding_quantity is None:
+                adjusted_open_cost_basis += position["cost_basis"]
+                continue
+            if holding_quantity <= ORDER_MATCH_EPSILON:
+                suppressed_symbols.append(position["symbol"])
+                continue
+            adjusted_open_cost_basis += position["cost_basis"]
+            if position["quantity"] > holding_quantity + ORDER_MATCH_EPSILON:
+                mismatched_symbols.append(position["symbol"])
+
+        summary["open_cost_basis"] = adjusted_open_cost_basis
+
+        if suppressed_symbols:
+            suppressed_list = ", ".join(sorted(suppressed_symbols))
+            summary["warnings"].append(
+                "Current holdings are zero for "
+                f"{suppressed_list}, so unmatched FIFO leftovers were excluded from Open Cost Basis."
+            )
+        if mismatched_symbols:
+            mismatch_list = ", ".join(sorted(mismatched_symbols))
+            summary["warnings"].append(
+                "Current holdings are smaller than the order-derived open quantity for "
+                f"{mismatch_list}; Open Cost Basis may still be overstated."
+            )
 
     summary["symbols_traded"] = sorted(summary["symbols_traded"])
     return summary
@@ -489,16 +640,26 @@ def _print_order_summary(summary):
     print(f"Net Cash Flow: ${summary['net_cash_flow']:,.2f}")
     print(f"Realized Profit/Loss: ${summary['realized_profit_loss']:,.2f}")
     print(f"Open Cost Basis: ${summary['open_cost_basis']:,.2f}")
-    if summary["unmatched_sell_quantity"] > 0:
+    if summary["unmatched_sell_quantity"] > ORDER_MATCH_EPSILON:
         print(
-            "Unmatched Sell Quantity: "
+            "Unmatched Sell Quantity (History Gap): "
             f"{summary['unmatched_sell_quantity']:,.8f}"
         )
     if summary["symbols_traded"]:
         print(f"Symbols Traded: {', '.join(summary['symbols_traded'])}")
+    if summary["warnings"]:
+        print("Warnings:")
+        for warning in summary["warnings"]:
+            print(f"- {warning}")
 
 
-def _print_payload(payload, output_format: str, resource: str):
+def _print_payload(
+    payload,
+    output_format: str,
+    resource: str,
+    holdings_payload=None,
+    summary_context=None,
+):
     if output_format == "json":
         print(json.dumps(payload, indent=2))
         return
@@ -511,7 +672,11 @@ def _print_payload(payload, output_format: str, resource: str):
             columns.append("filled_notional")
         render_table(prepared_rows, columns=columns)
         if resource == "orders-report":
-            summary = _summarize_orders(prepared_rows)
+            summary = _summarize_orders(
+                prepared_rows,
+                holdings_payload=holdings_payload,
+                summary_context=summary_context,
+            )
             _print_order_summary(summary)
         return
 
@@ -523,6 +688,16 @@ def _print_payload(payload, output_format: str, resource: str):
         return
 
     print(json.dumps(payload, indent=2))
+
+
+def _symbols_to_asset_codes(symbols):
+    asset_codes = []
+    for symbol in symbols:
+        normalized = symbol.strip().upper()
+        if not normalized:
+            continue
+        asset_codes.append(normalized.split("-", 1)[0])
+    return sorted(set(asset_codes))
 
 
 if __name__ == "__main__":
@@ -569,6 +744,21 @@ if __name__ == "__main__":
             )
             payload = _filter_order_rows_by_symbols(payload, symbols)
             payload = _apply_limit(payload, limit)
+            holdings_payload = None
+            holdings_warning = None
+            if resource == "orders-report":
+                try:
+                    holdings_payload = client.get_holdings(
+                        api_version=api_version,
+                        account_number=account_number,
+                        asset_codes=_symbols_to_asset_codes(symbols) if symbols else None,
+                        limit=None,
+                    )
+                except RobinhoodCryptoError as exc:
+                    holdings_warning = (
+                        "Current holdings could not be fetched for cross-checking: "
+                        f"{exc}"
+                    )
         elif resource == "holdings":
             account_number = _resolve_account_number(client, api_version, args.account_number)
             payload = client.get_holdings(
@@ -580,6 +770,16 @@ if __name__ == "__main__":
         else:
             payload = client.get_trading_pairs(api_version=api_version, symbols=symbols, limit=limit)
 
-        _print_payload(payload, output_format=output_format, resource=resource)
+        _print_payload(
+            payload,
+            output_format=output_format,
+            resource=resource,
+            holdings_payload=holdings_payload if resource == "orders-report" else None,
+            summary_context={
+                "limit_applied": limit is not None and limit > 0,
+                "created_at_start": created_at_start if resource == "orders-report" else None,
+                "holdings_warning": holdings_warning if resource == "orders-report" else None,
+            },
+        )
     except RobinhoodCryptoError as exc:
         print(f"Robinhood crypto error: {exc}")

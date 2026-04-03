@@ -113,8 +113,11 @@ If `--account-number` is omitted for `orders`, `orders-report`, or `holdings`, t
 
 - `orders` prints order rows
 - `orders-report` prints order rows plus a summary block
+- `orders-report` sorts fetched orders by `created_at` before FIFO matching buys and sells
+- `orders-report` cross-checks current holdings and hides leftover open cost basis for symbols whose live holdings are zero
 - symbol filtering for orders is applied client-side in the current script
-- if you have a long history, use `--created-at-start` and/or a higher timeout
+- if you use `--limit` or `--created-at-start`, the summary may warn that realized P/L and open cost basis are incomplete because older rows were excluded
+- if you have a long history, use a higher timeout and avoid `--limit` when you want the most reliable summary
 
 ## Safety Notes
 
