@@ -845,9 +845,15 @@ def _extract_balance_snapshot(client: KalshiClient):
         raise KalshiClientError(
             "Balance endpoint response missing expected fields: 'balance' and/or 'portfolio_value'."
         )
+    ending_cash = float(balance_cents) / 100.0
+    positions_value = float(portfolio_cents) / 100.0
     return {
-        "ending_cash": float(balance_cents) / 100.0,
-        "portfolio_value": float(portfolio_cents) / 100.0,
+        "ending_cash": ending_cash,
+        # Kalshi documents `portfolio_value` as the current value of held positions,
+        # not cash-plus-positions account equity.
+        "portfolio_value": positions_value,
+        "positions_value": positions_value,
+        "total_account_value": ending_cash + positions_value,
         "updated_ts": payload.get("updated_ts"),
     }
 
@@ -863,10 +869,15 @@ def _print_reconciliation(
         return
 
     ending_cash = balance_snapshot["ending_cash"]
-    portfolio_value = balance_snapshot["portfolio_value"]
-    open_market_value = portfolio_value - ending_cash
+    positions_value = balance_snapshot.get("positions_value")
+    if positions_value is None:
+        # Backward-compatible fallback for older cached balance snapshots.
+        positions_value = balance_snapshot.get("portfolio_value", 0.0)
+    total_account_value = balance_snapshot.get("total_account_value")
+    if total_account_value is None:
+        total_account_value = ending_cash + positions_value
     open_notional = summary["total_open_notional"]
-    estimated_unrealized = open_market_value - open_notional
+    estimated_unrealized = positions_value - open_notional
     estimated_total_profit_loss = summary["total_closed_profit_loss"] + estimated_unrealized
 
     print("")
@@ -877,8 +888,8 @@ def _print_reconciliation(
         source_text = f" [{starting_cash_source}]" if starting_cash_source else ""
         print(f"Starting Cash{source_text}: ${starting_cash:,.2f}")
     print(f"Ending Cash (Kalshi): ${ending_cash:,.2f}")
-    print(f"Portfolio Value (Kalshi): ${portfolio_value:,.2f}")
-    print(f"Open Market Value (Portfolio - Cash): ${open_market_value:,.2f}")
+    print(f"Portfolio Value (Kalshi Positions): ${positions_value:,.2f}")
+    print(f"Total Account Value (Cash + Portfolio): ${total_account_value:,.2f}")
     print(f"Open Notional (Cost Basis): ${open_notional:,.2f}")
     print(f"Estimated Unrealized P/L: ${estimated_unrealized:,.2f}")
     print(f"Trades Won: {summary['total_trades_won']}")
@@ -887,7 +898,7 @@ def _print_reconciliation(
     print(f"Closed Profit/Loss: ${summary['total_closed_profit_loss']:,.2f}")
     print(f"Estimated Total Profit/Loss: ${estimated_total_profit_loss:,.2f}")
     if starting_cash is not None:
-        net_vs_start = portfolio_value - starting_cash
+        net_vs_start = total_account_value - starting_cash
         print(f"Net P/L vs Starting Cash: ${net_vs_start:,.2f}")
     if debug_appendix:
         print("")

@@ -176,8 +176,8 @@ Reconciliation output includes:
 
 - Starting Cash
 - Ending Cash (Kalshi)
-- Portfolio Value (Kalshi)
-- Open Market Value
+- Portfolio Value (Kalshi Positions)
+- Total Account Value (Cash + Portfolio)
 - Open Notional (Cost Basis)
 - Estimated Unrealized P/L
 - Trades Won

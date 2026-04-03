@@ -85,8 +85,8 @@ In table mode, script prints:
 2. Reconciliation block:
    - Starting Cash
    - Ending Cash (Kalshi)
-   - Portfolio Value (Kalshi)
-   - Open Market Value
+   - Portfolio Value (Kalshi Positions)
+   - Total Account Value (Cash + Portfolio)
    - Open Notional (Cost Basis)
    - Estimated Unrealized P/L
    - Trades Won/Loss and Win/Loss %
