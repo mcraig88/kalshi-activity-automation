@@ -1,5 +1,6 @@
 import argparse
 import csv
+import glob
 import json
 import os
 import re
@@ -183,6 +184,22 @@ def _read_text_file(path: str):
         raise RobinhoodEventContractsError(
             f"Failed to read statement text file '{resolved}': {exc}"
         ) from exc
+
+
+def _expand_input_paths(paths, label: str):
+    expanded_paths = []
+    for original_path in paths:
+        resolved_path = os.path.expanduser(original_path)
+        matches = sorted(glob.glob(resolved_path))
+        if matches:
+            expanded_paths.extend(matches)
+            continue
+        if glob.has_magic(resolved_path):
+            raise RobinhoodEventContractsError(
+                f"No {label} files matched pattern: {original_path}"
+            )
+        expanded_paths.append(resolved_path)
+    return expanded_paths
 
 
 def _swift_pdf_extractor_source(pdf_path: str) -> str:
@@ -768,7 +785,7 @@ if __name__ == "__main__":
         else:
             if args.input_pdf:
                 reports = []
-                for pdf_path in args.input_pdf:
+                for pdf_path in _expand_input_paths(args.input_pdf, label="PDF"):
                     statement_text = _extract_pdf_text(pdf_path)
                     source_name = os.path.expanduser(pdf_path)
                     reports.append(
@@ -776,7 +793,7 @@ if __name__ == "__main__":
                     )
             else:
                 reports = []
-                for text_path in args.input_text:
+                for text_path in _expand_input_paths(args.input_text, label="text"):
                     statement_text = _read_text_file(text_path)
                     source_name = os.path.expanduser(text_path)
                     reports.append(

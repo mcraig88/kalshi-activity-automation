@@ -6,6 +6,7 @@ from robinhood_event_contracts import (
     RobinhoodEventContractsError,
     _build_monthly_statement_report,
     _combine_monthly_reports,
+    _expand_input_paths,
     _extract_statement_metadata,
     _read_csv_rows,
     _summarize,
@@ -57,6 +58,24 @@ class RobinhoodEventContractsTests(unittest.TestCase):
                 _read_csv_rows(path)
         finally:
             os.unlink(path)
+
+    def test_expand_input_paths_expands_glob_patterns(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first_path = os.path.join(temp_dir, "a.pdf")
+            second_path = os.path.join(temp_dir, "b.pdf")
+            with open(first_path, "w", encoding="utf-8") as handle:
+                handle.write("a")
+            with open(second_path, "w", encoding="utf-8") as handle:
+                handle.write("b")
+
+            expanded = _expand_input_paths([os.path.join(temp_dir, "*.pdf")], label="PDF")
+
+        self.assertEqual(expanded, [first_path, second_path])
+
+    def test_expand_input_paths_rejects_unmatched_glob_patterns(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(RobinhoodEventContractsError):
+                _expand_input_paths([os.path.join(temp_dir, "*.pdf")], label="PDF")
 
     def test_summarize_uses_shared_closed_contract_shape(self):
         rows = [

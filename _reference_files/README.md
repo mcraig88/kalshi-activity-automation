@@ -12,8 +12,7 @@ Example:
 
 ```bash
 ./.venv/bin/python ./robinhood_event_contracts.py \
-  --input-pdf ./_reference_files/sample_january_derivatives_events.pdf \
-  ./_reference_files/sample_february_derivatives_events.pdf \
+  --input-pdf ./_reference_files/*.pdf \
   --output-format table
 ```
 
@@ -21,3 +20,4 @@ Notes:
 
 - PDF files in this folder are ignored by git.
 - Keep statements local and do not commit account documents to the repository.
+- The importer expands glob patterns itself, so quoted patterns like `'./_reference_files/*.pdf'` also work.

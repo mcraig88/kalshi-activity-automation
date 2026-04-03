@@ -70,8 +70,7 @@ Import Robinhood event-contract monthly statements:
 
 ```bash
 ./.venv/bin/python ./robinhood_event_contracts.py \
-  --input-pdf ./_reference_files/sample_january_derivatives_events.pdf \
-  ./_reference_files/sample_february_derivatives_events.pdf \
+  --input-pdf ./_reference_files/*.pdf \
   --output-format table
 ```
 
